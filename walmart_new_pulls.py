@@ -53,7 +53,7 @@ def sendtoSQL(currentProducts):
         print(currentProducts)
         print("length currentProducts: " + str(len(currentProducts)))
         currentProducts = pd.DataFrame(currentProducts)
-        currentProducts.columns =["in_store", "name", "category_id", "category_path", "url", "site_type_id", "created_at", "updated_at", "upc", "unique_attrs", "orig_thumbnail_url", "orig_image_misc_url", "brand", "external_product_id", "price", "gender"]
+        currentProducts.columns =["in_store", "name", "category_id", "category_path", "menu_name", "category_name", "subcategory_name", "url", "site_type_id", "created_at", "updated_at", "upc", "unique_attrs", "orig_thumbnail_url", "orig_image_misc_url", "brand", "external_product_id", "price", "gender"]
         #wtax.columns = ["id", "name", "path"]
         
       
@@ -75,8 +75,22 @@ def getPageProducts(productArray, category_id):
         name = productArray[i]['name']
         if 'categoryPath' in productArray[i].keys():
             category_path = productArray[i]['categoryPath']
+            split_cp = category_path.split("/")
+            length_cp = len(split_cp)
+            if length_cp >= 3:
+                menu_name = split_cp[0]
+                category_name = split_cp[1]
+                subcategory_name = split_cp[2]
+            if length_cp == 2:
+                menu_name = split_cp[0]
+                category_name = split_cp[1]
+            if length_cp == 1:
+                menu_name = split_cp[0]
         else:
             category_path = None
+            menu_name = None
+            category_name = None
+            subcategory_name = None
         #sku = productArray[i]['']
         if 'productUrl' in productArray[i].keys():
             url = productArray[i]['productUrl']
@@ -129,7 +143,7 @@ def getPageProducts(productArray, category_id):
         site_type_id = 5
         created_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         updated_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        newProduct = [in_store, name, category_id, category_path, url, site_type_id, created_at, updated_at, upc, json.dumps(unique_attrs), orig_thumbnail_url, orig_image_misc_url, brand, external_product_id, price, gender]
+        newProduct = [in_store, name, category_id, category_path, menu_name, category_name, subcategory_name, url, site_type_id, created_at, updated_at, upc, json.dumps(unique_attrs), orig_thumbnail_url, orig_image_misc_url, brand, external_product_id, price, gender]
         print(newProduct)
         productList.append(newProduct)
     print("length of product list: " + str(len(productList)))
