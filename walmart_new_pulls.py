@@ -18,14 +18,27 @@ connection = engine.connect()
 
 api_key = #INSERT API KEY
 
-#Pull Walmart taxonomy get from postgres
-#wtax = pd.read_sql("select * from walmart_taxonomy", engine)
+#Pull Walmart taxonomy get from postgres. ordered so top categories are shown first
+#wtaxLeft = pd.read_sql("select * from walmart_taxonomy order by length(category_id)", engine)
+wtaxLeft = pd.read_sql("select * from walmart_taxonomy", engine)
+
+currentCatID = pd.read_sql("select category_id from walmart order by created_at desc limit 1", engine)['category_id'][0]
+currentCatIX = pd.read_sql("select index from walmart_taxonomy where category_id = '"+currentCatID+"'", engine)['index'][0]
+
+#if current category index < length, keep going
+if currentCatIX != wtaxLeft.iloc[len(wtaxLeft)-1]['category_id']:
+    wtaxLeft = wtaxLeft[currentCatIX:]
+    wtaxLeft = wtaxLeft.reset_index()
+#if current category index == length, start over cycle
+else:
+    currentCatIX == 0
+    
 
 #Pull Walmart taxonomy but exclude categories that have already been pulled
-wtaxLeft = pd.read_sql("select * from walmart_taxonomy where category_id not in (select distinct category_id from walmart)", engine)
+#wtaxLeft = pd.read_sql("select * from walmart_taxonomy where category_id not in (select distinct category_id from walmart)", engine)
 
 #ordered so top level categories are shown first
-wtaxLeft = pd.read_sql("select * from walmart_taxonomy where category_id not in (select distinct category_id from walmart) order by length(category_id)", engine)
+#wtaxLeft = pd.read_sql("select * from walmart_taxonomy where category_id not in (select distinct category_id from walmart) order by length(category_id)", engine)
 
 
 #pull current walmart products
@@ -50,20 +63,24 @@ def sendtoSQL(currentProducts):
     if currentProducts is None:
         print("currentProducts is None")
     else:
-        print(currentProducts)
-        print("length currentProducts: " + str(len(currentProducts)))
-        currentProducts = pd.DataFrame(currentProducts)
-        currentProducts.columns =["in_store", "name", "category_id", "category_path", "menu_name", "category_name", "subcategory_name", "url", "site_type_id", "created_at", "updated_at", "upc", "unique_attrs", "orig_thumbnail_url", "orig_image_misc_url", "brand", "external_product_id", "price", "gender"]
-        #wtax.columns = ["id", "name", "path"]
-        
-      
-        #convert unique_attrs dictionary to string so p
-        currentProducts['unique_attrs'] = currentProducts['unique_attrs'].apply(lambda x:str(x).replace("'",""))
-        
-        #send table to SQL (split up by category so that SQLAlchemy works better)
-        print(currentProducts)
-        table_name = 'walmart'
-        currentProducts.to_sql(table_name, con = engine, if_exists = "append", chunksize = 10)
+        try:
+            print(currentProducts)
+            print("length currentProducts: " + str(len(currentProducts)))
+            currentProducts = pd.DataFrame(currentProducts)
+            currentProducts.columns =["in_store", "name", "category_id", "category_path", "url", "site_type_id", "created_at", "updated_at", "upc", "unique_attrs", "orig_thumbnail_url", "orig_image_misc_url", "brand", "external_product_id", "price", "gender"]
+            #wtax.columns = ["id", "name", "path"]
+            
+          
+            #convert unique_attrs dictionary to string so p
+            currentProducts['unique_attrs'] = currentProducts['unique_attrs'].apply(lambda x:str(x).replace("'",""))
+            
+            #send table to SQL (split up by category so that SQLAlchemy works better)
+            print(currentProducts)
+            table_name = 'walmart'
+            currentProducts.to_sql(table_name, con = engine, if_exists = "append", chunksize = 10)
+        except Exception:
+            print("InternalError")
+            pass  # or you could use 'continue'
 
 def getPageProducts(productArray, category_id):
     productList = []
@@ -75,22 +92,8 @@ def getPageProducts(productArray, category_id):
         name = productArray[i]['name']
         if 'categoryPath' in productArray[i].keys():
             category_path = productArray[i]['categoryPath']
-            split_cp = category_path.split("/")
-            length_cp = len(split_cp)
-            if length_cp >= 3:
-                menu_name = split_cp[0]
-                category_name = split_cp[1]
-                subcategory_name = split_cp[2]
-            if length_cp == 2:
-                menu_name = split_cp[0]
-                category_name = split_cp[1]
-            if length_cp == 1:
-                menu_name = split_cp[0]
         else:
             category_path = None
-            menu_name = None
-            category_name = None
-            subcategory_name = None
         #sku = productArray[i]['']
         if 'productUrl' in productArray[i].keys():
             url = productArray[i]['productUrl']
@@ -101,7 +104,7 @@ def getPageProducts(productArray, category_id):
         else:
             upc = None
         unique_attrs = {'parentItemId': productArray[i]['parentItemId'],'productTrackingUrl': productArray[i]['productTrackingUrl'],  
-                        'rhid': productArray[i]['rhid'], 'bundle': productArray[i]['bundle'], 'clearance': productArray[i]['clearance'],  'stock': productArray[i]['stock'],
+                        'bundle': productArray[i]['bundle'], 'clearance': productArray[i]['clearance'],  'stock': productArray[i]['stock'],
                         'freeShippingOver35Dollars': productArray[i]['freeShippingOver35Dollars']}
         if 'attributes' in productArray[i].keys():
             unique_attrs['attributes'] = productArray[i]['attributes']
@@ -143,7 +146,7 @@ def getPageProducts(productArray, category_id):
         site_type_id = 5
         created_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         updated_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        newProduct = [in_store, name, category_id, category_path, menu_name, category_name, subcategory_name, url, site_type_id, created_at, updated_at, upc, json.dumps(unique_attrs), orig_thumbnail_url, orig_image_misc_url, brand, external_product_id, price, gender]
+        newProduct = [in_store, name, category_id, category_path, url, site_type_id, created_at, updated_at, upc, json.dumps(unique_attrs), orig_thumbnail_url, orig_image_misc_url, brand, external_product_id, price, gender]
         print(newProduct)
         productList.append(newProduct)
     print("length of product list: " + str(len(productList)))
@@ -213,9 +216,9 @@ allProds = getAllCategories(wtaxLeft)
 #catIx = wtax.loc[wtax['category_id']==recentCategory].index 
 #allProds = getAllCategories(wtax)
 
-currentCatID = '4171_4173_8031140'
-catIx = wtaxLeft.loc[wtaxLeft['name']=='VideoGames'].index
-catIx = wtaxLeft.loc[wtaxLeft['category_id']=='976760_1166769_4270807'].index
+#currentCatID = '4171_4173_8031140'
+#catIx = wtaxLeft.loc[wtaxLeft['name']=='VideoGames'].index
+#catIx = wtaxLeft.loc[wtaxLeft['category_id']=='976760_1166769_4270807'].index
 
 #convert list of lists to DF
 #allProducts = pd.DataFrame(allProducts)
@@ -229,8 +232,8 @@ catIx = wtaxLeft.loc[wtaxLeft['category_id']=='976760_1166769_4270807'].index
 
 
 #save to excel File, comment out if not necessary
-csvFile = 'walmart_all_products.csv'
-allProds.to_csv(csvFile, index=False)
+#csvFile = 'walmart_all_products.csv'
+#allProds.to_csv(csvFile, index=False)
 
 #send table to SQL
 #table_name = 'walmart'
