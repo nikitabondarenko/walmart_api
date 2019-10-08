@@ -9,3 +9,5 @@
 3) walmart_into_cw_products.py adds new products from the walmart table into cw_products. If the sku has been seen before we UPDATE the corresponding rows. If the sku has not been seen before we INSERT new rows.
 
 Note: if you set up a cronjob for walmart_new_pulls.py and walmart_into_cw_products.py then cw_products will continue being updated for new products.
+
+Note: can be difficult to install psycopg2 dependency on AWS ec2
