@@ -20,17 +20,28 @@ api_key = #INSERT API KEY
 
 #Pull Walmart taxonomy get from postgres. ordered so top categories are shown first
 #wtaxLeft = pd.read_sql("select * from walmart_taxonomy order by length(category_id)", engine)
+print("reading in walmart_taxonomy")
 wtaxLeft = pd.read_sql("select * from walmart_taxonomy", engine)
 
-currentCatID = pd.read_sql("select category_id from walmart order by created_at desc limit 1", engine)['category_id'][0]
+#get all walmart skus from cw_products
+print("getting in all walmart skus from cw_products")
+currentskus = pd.read_sql("select sku from cw_products where site_type_id = 5", engine)
+
+
+print("getting category_id of most recent product")
+currentCatID = pd.read_sql("select category_id from walmart_current order by created_at desc limit 1", engine)['category_id'][0]
+print("getting index of walmart_taxonomy of current category id")
 currentCatIX = pd.read_sql("select index from walmart_taxonomy where category_id = '"+currentCatID+"'", engine)['index'][0]
 
+print("if current category index < length keep going")
 #if current category index < length, keep going
-if currentCatIX != wtaxLeft.iloc[len(wtaxLeft)-1]['category_id']:
+if currentCatID != wtaxLeft.iloc[len(wtaxLeft)-1]['category_id']:
+    ("shorten wtaxLeft to start at the right index")
     wtaxLeft = wtaxLeft[currentCatIX:]
     wtaxLeft = wtaxLeft.reset_index()
 #if current category index == length, start over cycle
 else:
+    print("reset current Category index to 0")
     currentCatIX == 0
     
 
@@ -60,6 +71,7 @@ allProducts = []
 
 def sendtoSQL(currentProducts):
     #convert list of lists to DF
+    #once we have a list of all the categories products, we can send to SQL (one at a time)
     if currentProducts is None:
         print("currentProducts is None")
     else:
@@ -71,13 +83,34 @@ def sendtoSQL(currentProducts):
             #wtax.columns = ["id", "name", "path"]
             
           
-            #convert unique_attrs dictionary to string so p
+            #convert unique_attrs dictionary to string
+            print("convert unique attrs to string")
             currentProducts['unique_attrs'] = currentProducts['unique_attrs'].apply(lambda x:str(x).replace("'",""))
             
-            #send table to SQL (split up by category so that SQLAlchemy works better)
+            #add in_store_boolean
+            print("adding in_store=1 or 0 boolean")
+            currentProducts['in_store_boolean'] = [1 if x =='Available' or x== 'available' or x=='Limited Supply' or x=='Limited supply' or x == 'Last Few Items' else 0 for x in currentProducts['in_store']]
+            
             print(currentProducts)
-            table_name = 'walmart'
-            currentProducts.to_sql(table_name, con = engine, if_exists = "append", chunksize = 10)
+            print("updating_walmart_current")
+            table_name = 'walmart_current'
+            currentProducts.to_sql(table_name, con = engine, if_exists = "replace", chunksize = 10)
+                        
+            #add to cw_products
+            #two cases
+            #1) id's that are already in cw_products
+            #UPDATE
+            #updates products with skus that are already in table if the updated_time is more recent
+            print("UPDATING cw_products skus that are already in table (if updated_time is more recent)")
+            connection.execute("UPDATE cw_products c SET in_store = w.in_store_boolean, name = w.name, updated_at = w.updated, inventory_last_seen_at = w.updated, price = w.price, external_product_id = w.external_product_id FROM (select in_store_boolean, name, category_path, price, external_product_id, updated_at::timestamp updated, concat(name, ' ', upc) as nameupc from walmart_current where external_product_id in (select cast(sku as bigint) from cw_products where site_type_id = 5)) w WHERE concat(c.name, ' ', c.upc) = w.nameupc and c.updated_at < w.updated")
+            
+            #2) new id's 
+            #INSERT
+            #inserts products where the sku has not been added to 
+            print("INSERTING cw_product skus that have not been seen before")
+            connection.execute("INSERT INTO cw_products (in_store, name, category_path, sku, url, site_type_id, created_at, updated_at, upc, unique_attrs, inventory_last_seen_at, orig_thumbnail_url, orig_image_misc_url, brand, external_product_id, price, gender) SELECT in_store_boolean, name, category_path, external_product_id, url, site_type_id, created_at::timestamp, updated_at::timestamp, upc, unique_attrs, updated_at::timestamp, orig_thumbnail_url, orig_image_misc_url, brand, external_product_id, price, gender from walmart_current where external_product_id not in (select cast(sku as bigint) from cw_products where site_type_id = 5)")
+
+            
         except Exception:
             print("InternalError")
             pass  # or you could use 'continue'
@@ -238,6 +271,15 @@ allProds = getAllCategories(wtaxLeft)
 #send table to SQL
 #table_name = 'walmart'
 #allProductsNew.to_sql(table_name, con = engine, if_exists = "replace", chunksize = 10)
+
+#add menu_name, category_name, subcategory_name from category_path
+print("fill in menu_name, category_name, subcategory_name columns for new products using category_path column")
+connection.excute("UPDATE cw_products c1 SET menu_name = split_part(c2.category_path, '/', 1), category_name = split_part(c2.category_path, '/', 2), subcategory_name = split_part(c2.category_path, '/', 3) FROM cw_products c2 WHERE c1.sku = c2.sku AND c1.menu_name is null and c1.site_type_id = 5)")
+
+print("vacuuming walmart_current")
+connection.execute("vacuum walmart_current")
+print("vacuuming cw_products")
+connection.execute("vacuum cw_products")
 
 connection.close()
 engine.dispose()
