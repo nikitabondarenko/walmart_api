@@ -274,7 +274,7 @@ allProds = getAllCategories(wtaxLeft)
 
 #add menu_name, category_name, subcategory_name from category_path
 print("fill in menu_name, category_name, subcategory_name columns for new products using category_path column")
-connection.excute("UPDATE cw_products c1 SET menu_name = split_part(c2.category_path, '/', 1), category_name = split_part(c2.category_path, '/', 2), subcategory_name = split_part(c2.category_path, '/', 3) FROM cw_products c2 WHERE c1.sku = c2.sku AND c1.menu_name is null and c1.site_type_id = 5)")
+connection.excute("UPDATE cw_products c1 SET menu_name = split_part(c2.category_path, '/', 1), category_name = split_part(c2.category_path, '/', 2), subcategory_name = split_part(c2.category_path, '/', 3) FROM cw_products c2 WHERE c1.sku = c2.sku AND c1.menu_name is null and c1.site_type_id = 5")
 
 print("vacuuming walmart_current")
 connection.execute("vacuum walmart_current")
