@@ -8,15 +8,15 @@ import time
 import datetime
 from time import sleep
 
-print("connecting to postgres server via SQLAlchemy + psycopg2")
-engine = create_engine('postgresql://deployer:p0877e546c0539179b1fb234649e2aba6691a28b53815b7710a93d65cc21c2059@haystack.cety7wul5z9k.us-west-2.rds.amazonaws.com:5432/haystack3_production')
+#INSERT DATABASE CREDENTIALS
+engine = create_engine(#INSERT CREDENTIALS)
 connection = engine.connect()
 
 #allProds = pd.read_csv('walmart_all_products.csv')
 
 #wtax = pd.read_excel('walmart_taxonomy_lowest_level_categories.xlsx')
 
-api_key = 'zd9j7ey5b6qzmh2fv2m8nyyv'
+api_key = #INSERT API KEY
 
 #Pull Walmart taxonomy get from postgres. ordered so top categories are shown first
 #wtaxLeft = pd.read_sql("select * from walmart_taxonomy order by length(category_id)", engine)
