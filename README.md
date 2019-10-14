@@ -9,3 +9,6 @@
 Note: if you set up a cronjob for walmart_new_pulls.py then cw_products will continue being updated for new products.
 
 Note: can be difficult to install psycopg2 dependency on AWS ec2
+
+
+walmart_trending.py is a separate file that pulls the trending products from Walmart and sends to the postgresql table walmart_trending
