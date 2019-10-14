@@ -8,15 +8,15 @@ import time
 import datetime
 from time import sleep
 
-#INSERT DATABASE CREDENTIALS
-engine = create_engine(#INSERT CREDENTIALS)
+print("connecting to postgres server via SQLAlchemy + psycopg2")
+engine = create_engine('postgresql://deployer:p0877e546c0539179b1fb234649e2aba6691a28b53815b7710a93d65cc21c2059@haystack.cety7wul5z9k.us-west-2.rds.amazonaws.com:5432/haystack3_production')
 connection = engine.connect()
 
 #allProds = pd.read_csv('walmart_all_products.csv')
 
 #wtax = pd.read_excel('walmart_taxonomy_lowest_level_categories.xlsx')
 
-api_key = #INSERT API KEY
+api_key = 'zd9j7ey5b6qzmh2fv2m8nyyv'
 
 #Pull Walmart taxonomy get from postgres. ordered so top categories are shown first
 #wtaxLeft = pd.read_sql("select * from walmart_taxonomy order by length(category_id)", engine)
@@ -110,7 +110,10 @@ def sendtoSQL(currentProducts):
             print("INSERTING cw_product skus that have not been seen before")
             connection.execute("INSERT INTO cw_products (in_store, name, category_path, sku, url, site_type_id, created_at, updated_at, upc, unique_attrs, inventory_last_seen_at, orig_thumbnail_url, orig_image_misc_url, brand, external_product_id, price, gender) SELECT in_store_boolean, name, category_path, external_product_id, url, site_type_id, created_at::timestamp, updated_at::timestamp, upc, unique_attrs, updated_at::timestamp, orig_thumbnail_url, orig_image_misc_url, brand, external_product_id, price, gender from walmart_current where external_product_id not in (select cast(sku as bigint) from cw_products where site_type_id = 5)")
 
-            
+            #add menu_name, category_name, subcategory_name from category_path
+            print("fill in menu_name, category_name, subcategory_name columns for new products using category_path column")
+            connection.excute("UPDATE cw_products c1 SET menu_name = split_part(c2.category_path, '/', 1), category_name = split_part(c2.category_path, '/', 2), subcategory_name = split_part(c2.category_path, '/', 3) FROM cw_products c2 WHERE c1.sku = c2.sku AND c1.menu_name is null and c1.site_type_id = 5")
+
         except Exception:
             print("InternalError")
             pass  # or you could use 'continue'
@@ -239,6 +242,10 @@ def getAllCategories(categories):
             print("category products is none")
         else:
             allProducts = allProducts + categoryProducts
+    print("vacuuming walmart_current")
+    connection.execute("vacuum walmart_current")
+    print("vacuuming cw_products")
+    connection.execute("vacuum cw_products")
     return allProducts
 
 
@@ -272,14 +279,6 @@ allProds = getAllCategories(wtaxLeft)
 #table_name = 'walmart'
 #allProductsNew.to_sql(table_name, con = engine, if_exists = "replace", chunksize = 10)
 
-#add menu_name, category_name, subcategory_name from category_path
-print("fill in menu_name, category_name, subcategory_name columns for new products using category_path column")
-connection.excute("UPDATE cw_products c1 SET menu_name = split_part(c2.category_path, '/', 1), category_name = split_part(c2.category_path, '/', 2), subcategory_name = split_part(c2.category_path, '/', 3) FROM cw_products c2 WHERE c1.sku = c2.sku AND c1.menu_name is null and c1.site_type_id = 5")
-
-print("vacuuming walmart_current")
-connection.execute("vacuum walmart_current")
-print("vacuuming cw_products")
-connection.execute("vacuum cw_products")
 
 connection.close()
 engine.dispose()
